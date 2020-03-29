@@ -1,4 +1,26 @@
 
+import time
+import board
+import digitalio
+
+data_bus = [
+        board.RX,
+        board.TX,
+        board.D7,
+        board.D9,
+        board.D10,
+        board.D11,
+        board.D13,
+        board.D12
+    ]
+
+IC = board.D2
+A0 = board.MISO
+A1 = board.MOSI
+WR = board.SCK
+RD = board.A5
+CS = board.A4
+
 class RWPin:
     """
     Single pin controller to manage R/W
@@ -11,10 +33,12 @@ class RWPin:
         self._pin_obj.direction = digitalio.Direction.OUTPUT
 
     def __get__(self, obj, objtype=None):
+        print("get pin")
         self._pin_obj.direction = digitalio.Direction.INPUT
         return self._pin_obj.value
 
     def __set__(self, obj, value):
+        print("set pin")
         self._pin_obj.direction = digitalio.Direction.OUTPUT
         self._pin_obj.value = value
 
@@ -97,15 +121,13 @@ class Bus8Bit:
 
 
 
-import time
-import board
-import digitalio
 HIGH = True
 LOW = False
 class OPL3:
+    _cs = RWPin(CS)
     def __init__(self, bus_pin_names, cs, a0, a1, ic, wr, rd):
         self._ic = RWPin(ic)
-        self._cs = RWPin(cs)
+        #self._cs = RWPin(cs)
         self._wr = RWPin(wr)
         self._rd = RWPin(rd)
         self._data_write = RWPin(a0)
@@ -137,38 +159,35 @@ class OPL3:
                 return
 
 if __name__ == "__main__":
-    data_bus = [
-        board.RX,
-        board.TX,
-        board.D7,
-        board.D9,
-        board.D10,
-        board.D11,
-        board.D13,
-        board.D12
-    ]
-
-    IC = board.D2
-    A0 = board.MISO
-    A1 = board.MOSI
-    WR = board.SCK
-    RD = board.A5
-    CS = board.A4
 
     opl = OPL3(data_bus, CS, A0, A1, IC, WR, RD)
     BIT_TIME = 0.01
     LOOP_TIME = 0.5
     print("made opl")
     while True:
-        opl.bus.set(0xF0)
+        opl.bus.set(0x0)
         opl.toggle_clock()
-        print("bus:", hex(opl.bus.get()))
+        print("bus.to_s:", opl.bus.to_s())
+        time.sleep(BIT_TIME)
+        opl.bus.set(0x0F)
+        opl.toggle_clock()
         print("bus.to_s:", opl.bus.to_s())
         time.sleep(BIT_TIME)
 
         opl.bus.set(0x1)
         opl.toggle_clock()
-        print("bus:", hex(opl.bus.get()))
+        print("bus.to_s:", opl.bus.to_s())
+        time.sleep(BIT_TIME)
+        opl.bus.set(0x2)
+        opl.toggle_clock()
+        print("bus.to_s:", opl.bus.to_s())
+        time.sleep(BIT_TIME)
+        opl.bus.set(0x4)
+        opl.toggle_clock()
+        print("bus.to_s:", opl.bus.to_s())
+        time.sleep(BIT_TIME)
+        opl.bus.set(0x8)
+        opl.toggle_clock()
         print("bus.to_s:", opl.bus.to_s())
         time.sleep(BIT_TIME)
         # opl.set_bus(0x20)
