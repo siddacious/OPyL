@@ -14,8 +14,6 @@ class RWPin:
         self._pin_obj.direction = digitalio.Direction.INPUT
         return self._pin_obj.value
 
-    def _init_pin(self, pin_name):
-
     def __set__(self, obj, value):
         self._pin_obj.direction = digitalio.Direction.OUTPUT
         self._pin_obj.value = value
@@ -28,18 +26,37 @@ class Bus8Bit:
     """
 
     def __init__(self, bus_pin_names):
+        self._bus = []
         self._init_bus(bus_pin_names)
 
-    def __get__(self, obj, objtype=None):
+    def get(self):
+
         bus_value = 0
-        mask = 0x0
+
         for i in range(8):
-            bus_value |= (self._bus[i].value) << (7-i)
+            bitval = 0
+            pin_val = (self._bus[i].value)
+            if pin_val is True:
+                bitval = 1
+            else:
+                bitval = 0
+            bus_value |= bitval << i
         return bus_value
 
-    def _init_pin(self, pin_name):
+    def print_bus(self):
+        print("0x", end="")
+        for i in range(7, -1, -1):
+            pin_level = -1
+            pin_val =self._bus[i].value
+            if pin_val is True:
+                pin_level = 1
+            else:
+                pin_level = 0
+            print(pin_level, end="")
+        print("")
 
-    def __set__(self, obj, value):
+
+    def set(self, value):
         if value < 0 or value > 255:
             raise AttributeError("value must be one byte")
         for i in range(8):
@@ -51,7 +68,20 @@ class Bus8Bit:
             pin_obj.direction = digitalio.Direction.OUTPUT
             self._bus.append(pin_obj)
             self._bus[i].value = LOW
+        print("bus after init", self._bus)
 
+    def to_s(self):
+        valstr = "0x"
+        for i in range(7, -1, -1):
+            pin_level = -1
+            pin_val = self._bus[i].value
+            if pin_val is True:
+                pin_level = "1"
+            else:
+                pin_level = "0"
+            valstr += pin_level
+
+        return valstr
     # def __str__(self):
     #     val = self.__get__(self)
     #     for i in range(7, -1, -1):
@@ -64,7 +94,7 @@ class Bus8Bit:
     #         print(pin_level, end="")
     #     print("")
 
-    def set_bus(self, value):
+
 
 
 import time
@@ -74,22 +104,14 @@ HIGH = True
 LOW = False
 class OPL3:
     def __init__(self, bus_pin_names, cs, a0, a1, ic, wr, rd):
-        self._bus = []
         self._ic = RWPin(ic)
         self._cs = RWPin(cs)
         self._wr = RWPin(wr)
         self._rd = RWPin(rd)
         self._data_write = RWPin(a0)
         self._bank_select = RWPin(a1)
-        self._wr = RWPin(wr)
 
         self.bus = Bus8Bit(bus_pin_names)
-
-
-    # def _init_pin(self, pin_name):
-    #     pin_obj = digitalio.DigitalInOut(pin_name)
-    #     pin_obj.direction = digitalio.Direction.OUTPUT
-    #     return pin_obj
 
     def read_status(self):
         # set control pins
@@ -106,15 +128,13 @@ class OPL3:
 
     def toggle_clock(self):
         start = time.monotonic_ns()
-        self._wr_cs.value = True
+        self._cs = True
         while True:
             time.sleep(0.001)
             #1 000 000 000
             if (time.monotonic_ns()-start) > 10000000:
-                self._wr_cs.value = False
+                self._cs = False
                 return
-
-
 
 if __name__ == "__main__":
     data_bus = [
@@ -128,7 +148,6 @@ if __name__ == "__main__":
         board.D12
     ]
 
-    
     IC = board.D2
     A0 = board.MISO
     A1 = board.MOSI
@@ -141,11 +160,16 @@ if __name__ == "__main__":
     LOOP_TIME = 0.5
     print("made opl")
     while True:
-        opl.bus = 0xFF
+        opl.bus.set(0xF0)
         opl.toggle_clock()
+        print("bus:", hex(opl.bus.get()))
+        print("bus.to_s:", opl.bus.to_s())
         time.sleep(BIT_TIME)
-        opl.bus = 0x1
+
+        opl.bus.set(0x1)
         opl.toggle_clock()
+        print("bus:", hex(opl.bus.get()))
+        print("bus.to_s:", opl.bus.to_s())
         time.sleep(BIT_TIME)
         # opl.set_bus(0x20)
         # opl.toggle_clock()
