@@ -1,19 +1,19 @@
 # An official method of Adlib (OPL2) detection is:
 
-#Reset Timer 1 and Timer 2: 
+#Reset Timer 1 and Timer 2:
 # write 60h to register 4
-# Reset the IRQ: 
+# Reset the IRQ:
 # write 80h to register 4.
 #    Note: Steps 1 and 2 can't be combined together.
  #.Read status
 #  read port base+0 (388h) and save the result
-# .Set Timer 1 to FFh: 
-# write FFh to register 2  
+# .Set Timer 1 to FFh:
+# write FFh to register 2
 #  -- Unmask and start Timer 1
 # write 21h to register 4.
 # Wait in a delay loop for at least 80 usec.
-#Read status Save the result. 
-# read port base+0 (388h). 
+#Read status Save the result.
+# read port base+0 (388h).
 # Reset Timer 1, Timer 2 and IRQ as in steps 1 and 2.
 # Test the results of the two reads:
 #  the first should be 0, the second should be C0h. If either is incorrect, then the OPL2 is not present.
@@ -64,9 +64,12 @@ import digitalio
 class OPL3:
     def __init__(self, bus_pin_names, ic, wr_cs, a0, a1):
         self._bus = []
-        self._ic = ic
-        self._wr_cs = wr_cs
-        self._addr=[a0, a1]
+        self._ic = self._init_pin(ic)
+        self._wr_cs = self._init_pin(wr_cs)
+        self._addr=[
+            self._init_pin(a0),
+            self._init_pin(a1)
+        ]
         self._init_bus(bus_pin_names)
 
     def _init_bus(self, bus_pin_names):
@@ -74,8 +77,9 @@ class OPL3:
             # pin_obj = digitalio.DigitalInOut(bus_pin_names[i])
             # pin_obj.direction = digitalio.Direction.OUTPUT
             self._bus.append(self._init_pin(bus_pin_names[i]))
+            self._bus[i].value = False
 
-    def _init_pin(pin_name):
+    def _init_pin(self, pin_name):
         pin_obj = digitalio.DigitalInOut(pin_name)
         pin_obj.direction = digitalio.Direction.OUTPUT
         return pin_obj
@@ -100,7 +104,15 @@ class OPL3:
         self.print_bus()
 
     def toggle_clock(self):
-        self._wr_cs
+        start = time.monotonic_ns()
+        self._wr_cs.value = True
+        while True:
+            time.sleep(0.001)
+            #1 000 000 000
+            if (time.monotonic_ns()-start) > 10000000:
+                self._wr_cs.value = False
+                return
+
 
 
 if __name__ == "__main__":
@@ -119,21 +131,46 @@ if __name__ == "__main__":
     A0 = board.SCK
     A1 = board.MOSI
     opl = OPL3(data_bus, IC, WR_CS, A0, A1)
-    BIT_TIME = 0.10
+    BIT_TIME = 0.01
     LOOP_TIME = 0.5
     print("made opl")
     while True:
         opl.set_bus(0x80)
+        opl.toggle_clock()
         time.sleep(BIT_TIME)
         opl.set_bus(0x40)
+        opl.toggle_clock()
         time.sleep(BIT_TIME)
         opl.set_bus(0x20)
+        opl.toggle_clock()
         time.sleep(BIT_TIME)
         opl.set_bus(0x10)
+        opl.toggle_clock()
+
+        opl.set_bus(0x01)
+        opl.toggle_clock()
         time.sleep(BIT_TIME)
+        opl.set_bus(0x02)
+        opl.toggle_clock()
+        time.sleep(BIT_TIME)
+        opl.set_bus(0x04)
+        opl.toggle_clock()
+        time.sleep(BIT_TIME)
+        opl.set_bus(0x08)
+        opl.toggle_clock()
+        time.sleep(BIT_TIME)
+
         opl.set_bus(0xF0)
+        opl.toggle_clock()
         time.sleep(BIT_TIME)
         opl.set_bus(0x0F)
+        opl.toggle_clock()
+        time.sleep(BIT_TIME)
+        opl.set_bus(0xF0)
+        opl.toggle_clock()
+        time.sleep(BIT_TIME)
+        opl.set_bus(0x0F)
+        opl.toggle_clock()
         time.sleep(BIT_TIME)
         time.sleep(LOOP_TIME)
         print("--loop---")
