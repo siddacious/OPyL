@@ -20,6 +20,9 @@ A1 = board.MOSI
 WR = board.SCK
 RD = board.A5
 CS = board.A4
+BIT_TIME = 0.01
+LOOP_TIME = .5
+pv = {True : 1, False: 0}
 
 class RWPin:
     """
@@ -32,15 +35,17 @@ class RWPin:
         self._pin_obj = digitalio.DigitalInOut(pin_name)
         self._pin_obj.direction = digitalio.Direction.OUTPUT
 
-    def __get__(self, obj, objtype=None):
-        print("get pin")
+    def get(self):
         self._pin_obj.direction = digitalio.Direction.INPUT
-        return self._pin_obj.value
 
-    def __set__(self, obj, value):
-        print("set pin")
+        return pv[self._pin_obj.value]
+
+    def set(self, value):
         self._pin_obj.direction = digitalio.Direction.OUTPUT
-        self._pin_obj.value = value
+        if (value == 1) or (value == HIGH):
+            self._pin_obj.value = True
+        else:
+            self._pin_obj.value = False
 
 class Bus8Bit:
     """
@@ -54,82 +59,42 @@ class Bus8Bit:
         self._init_bus(bus_pin_names)
 
     def get(self):
-
         bus_value = 0
-
         for i in range(8):
-            bitval = 0
-            pin_val = (self._bus[i].value)
-            if pin_val is True:
-                bitval = 1
-            else:
-                bitval = 0
-            bus_value |= bitval << i
+            pin_val = (self._bus[i].get())
+            bus_value |= pin_val << i
         return bus_value
 
-    def print_bus(self):
-        print("0x", end="")
-        for i in range(7, -1, -1):
-            pin_level = -1
-            pin_val =self._bus[i].value
-            if pin_val is True:
-                pin_level = 1
-            else:
-                pin_level = 0
-            print(pin_level, end="")
-        print("")
 
 
     def set(self, value):
         if value < 0 or value > 255:
             raise AttributeError("value must be one byte")
         for i in range(8):
-            self._bus[i].value = (value >> i) & 0x1
+            self._bus[i].set((value >> i) & 0x1)
 
     def _init_bus(self, bus_pin_names):
         for i in range(8):
-            pin_obj = digitalio.DigitalInOut(bus_pin_names[i])
-            pin_obj.direction = digitalio.Direction.OUTPUT
-            self._bus.append(pin_obj)
-            self._bus[i].value = LOW
-        print("bus after init", self._bus)
+            self._bus.append(RWPin(bus_pin_names[i]))
+            self._bus[i].set(LOW)
 
     def to_s(self):
         valstr = "0x"
         for i in range(7, -1, -1):
-            pin_level = -1
-            pin_val = self._bus[i].value
-            if pin_val is True:
-                pin_level = "1"
-            else:
-                pin_level = "0"
-            valstr += pin_level
+            valstr += str(self._bus[i].get())
 
         return valstr
-    # def __str__(self):
-    #     val = self.__get__(self)
-    #     for i in range(7, -1, -1):
-    #         pin_level = -1
-    #         pin_val =self._bus[i].value
-    #         if pin_val is True:
-    #             pin_level = 1
-    #         else:
-    #             pin_level = 0
-    #         print(pin_level, end="")
-    #     print("")
-
-
-
 
 HIGH = True
 LOW = False
 class OPL3:
-    _cs = RWPin(CS)
+    # _cs = RWPin(CS)
     def __init__(self, bus_pin_names, cs, a0, a1, ic, wr, rd):
         self._ic = RWPin(ic)
-        #self._cs = RWPin(cs)
+        self._cs = RWPin(cs)
         self._wr = RWPin(wr)
         self._rd = RWPin(rd)
+        self.test = RWPin(board.A0)
         self._data_write = RWPin(a0)
         self._bank_select = RWPin(a1)
 
@@ -138,89 +103,50 @@ class OPL3:
     def read_status(self):
         # set control pins
         # A0=L
-        self._data_write = LOW
+        self._data_write.set(LOW)
         # - Tas -10 ns
         # CS=L
-        self._cs= LOW
+        self._cs.set(LOW)
         # RD=L
-        self._rd = LOW
+        self._rd.set(LOW)
         # - Tacc - 150ns max(most you'll have to wait for data to be ready)
-        return self.bus
+        value = self.bus.get()
+        self._rd.set(HIGH)
+        self._cs.set(HIGH)
+        self._data_write.set(HIGH)
+        return self.bus.get()
         # read bus
 
     def toggle_clock(self):
         start = time.monotonic_ns()
-        self._cs = True
+        self._cs.set(HIGH)
         while True:
             time.sleep(0.001)
             #1 000 000 000
             if (time.monotonic_ns()-start) > 10000000:
-                self._cs = False
+                self._cs.set(LOW)
                 return
+    
+    def send(self, value):
+        self.bus.set(value)
+        self.toggle_clock()
 
 if __name__ == "__main__":
 
     opl = OPL3(data_bus, CS, A0, A1, IC, WR, RD)
-    BIT_TIME = 0.01
-    LOOP_TIME = 0.5
+
     print("made opl")
     while True:
-        opl.bus.set(0x0)
-        opl.toggle_clock()
-        print("bus.to_s:", opl.bus.to_s())
-        time.sleep(BIT_TIME)
-        opl.bus.set(0x0F)
-        opl.toggle_clock()
-        print("bus.to_s:", opl.bus.to_s())
+
+        opl.send(0x01)
+        opl.send(0x02)
+        opl.send(0x04)
+        opl.send(0x08)
+        
         time.sleep(BIT_TIME)
 
-        opl.bus.set(0x1)
-        opl.toggle_clock()
-        print("bus.to_s:", opl.bus.to_s())
-        time.sleep(BIT_TIME)
-        opl.bus.set(0x2)
-        opl.toggle_clock()
-        print("bus.to_s:", opl.bus.to_s())
-        time.sleep(BIT_TIME)
-        opl.bus.set(0x4)
-        opl.toggle_clock()
-        print("bus.to_s:", opl.bus.to_s())
-        time.sleep(BIT_TIME)
-        opl.bus.set(0x8)
-        opl.toggle_clock()
-        print("bus.to_s:", opl.bus.to_s())
-        time.sleep(BIT_TIME)
-        # opl.set_bus(0x20)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-        # opl.set_bus(0x10)
-        # opl.toggle_clock()
+        print("status:", bin(opl.read_status()))
 
-        # opl.set_bus(0x01)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-        # opl.set_bus(0x02)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-        # opl.set_bus(0x04)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-        # opl.set_bus(0x08)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-
-        # opl.set_bus(0xF0)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-        # opl.set_bus(0x0F)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-        # opl.set_bus(0xF0)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
-        # opl.set_bus(0x0F)
-        # opl.toggle_clock()
-        # time.sleep(BIT_TIME)
         time.sleep(LOOP_TIME)
         print("--loop---")
 
